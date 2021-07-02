@@ -61,6 +61,7 @@ jobs:
             --ignore=pymc3/tests/test_idata_conversion.py
 
           - pymc3/tests/test_distributions.py
+          - pymc3/tests/test_variational_inference.py
 
           - |
             pymc3/tests/test_modelcontext.py
@@ -151,6 +152,7 @@ jobs:
         os: [windows-latest]
         floatx: [float32, float64]
         test-subset:
+          - pymc3/tests/test_variational_inference.py
           - |
             pymc3/tests/test_distributions_random.py
             pymc3/tests/test_distributions_timeseries.py
