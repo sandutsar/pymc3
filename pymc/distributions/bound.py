@@ -1,4 +1,4 @@
-#   Copyright 2020 The PyMC Developers
+#   Copyright 2023 The PyMC Developers
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -11,21 +11,25 @@
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
+import warnings
 
-import aesara.tensor as at
 import numpy as np
+import pytensor.tensor as pt
 
-from aesara.tensor import as_tensor_variable
-from aesara.tensor.random.op import RandomVariable
-from aesara.tensor.var import TensorVariable
+from pytensor.tensor import as_tensor_variable
+from pytensor.tensor.random.op import RandomVariable
+from pytensor.tensor.var import TensorVariable
 
-from pymc.aesaraf import floatX, intX
-from pymc.distributions.continuous import BoundedContinuous
+from pymc.distributions.continuous import BoundedContinuous, bounded_cont_transform
 from pymc.distributions.dist_math import check_parameters
 from pymc.distributions.distribution import Continuous, Discrete
-from pymc.distributions.logprob import logp
 from pymc.distributions.shape_utils import to_tuple
+from pymc.distributions.transforms import _default_transform
+from pymc.logprob.basic import logp
+from pymc.logprob.utils import ignore_logprob
 from pymc.model import modelcontext
+from pymc.pytensorf import floatX, intX
+from pymc.util import check_dist_not_registered
 
 __all__ = ["Bound"]
 
@@ -68,8 +72,8 @@ class _ContinuousBounded(BoundedContinuous):
         -------
         TensorVariable
         """
-        res = at.switch(
-            at.or_(at.lt(value, lower), at.gt(value, upper)),
+        res = pt.switch(
+            pt.or_(pt.lt(value, lower), pt.gt(value, upper)),
             -np.inf,
             logp(distribution, value),
         )
@@ -79,6 +83,11 @@ class _ContinuousBounded(BoundedContinuous):
             lower <= upper,
             msg="lower <= upper",
         )
+
+
+@_default_transform.register(BoundRV)
+def bound_default_transform(op, rv):
+    return bounded_cont_transform(op, rv, _ContinuousBounded.bound_args_indices)
 
 
 class DiscreteBoundRV(BoundRV):
@@ -93,8 +102,8 @@ class _DiscreteBounded(Discrete):
     rv_op = discrete_boundrv
 
     def __new__(cls, *args, **kwargs):
-        transform = kwargs.get("transform", None)
-        if transform is not None:
+        kwargs.setdefault("transform", None)
+        if kwargs.get("transform") is not None:
             raise ValueError("Cannot transform discrete variable.")
         return super().__new__(cls, *args, **kwargs)
 
@@ -117,8 +126,8 @@ class _DiscreteBounded(Discrete):
         -------
         TensorVariable
         """
-        res = at.switch(
-            at.or_(at.lt(value, lower), at.gt(value, upper)),
+        res = pt.switch(
+            pt.or_(pt.lt(value, lower), pt.gt(value, upper)),
             -np.inf,
             logp(distribution, value),
         )
@@ -144,11 +153,12 @@ class Bound:
 
     Parameters
     ----------
-    distribution: pymc distribution
-        Distribution to be transformed into a bounded distribution.
-    lower: float or array like, optional
+    dist : PyMC unnamed distribution
+        Distribution to be transformed into a bounded distribution created via the
+        `.dist()` API.
+    lower : float or array like, optional
         Lower bound of the distribution.
-    upper: float or array like, optional
+    upper : float or array like, optional
         Upper bound of the distribution.
 
     Examples
@@ -156,15 +166,15 @@ class Bound:
     .. code-block:: python
 
         with pm.Model():
-            normal_dist = Normal.dist(mu=0.0, sigma=1.0, initval=-0.5)
-            negative_normal = pm.Bound(normal_dist, upper=0.0)
+            normal_dist = pm.Normal.dist(mu=0.0, sigma=1.0)
+            negative_normal = pm.Bound("negative_normal", normal_dist, upper=0.0)
 
     """
 
     def __new__(
         cls,
         name,
-        distribution,
+        dist,
         lower=None,
         upper=None,
         size=None,
@@ -173,8 +183,15 @@ class Bound:
         dims=None,
         **kwargs,
     ):
-
-        cls._argument_checks(distribution, **kwargs)
+        warnings.warn(
+            "Bound has been deprecated in favor of Truncated, and will be removed in a "
+            "future release. If Truncated is not an option, Bound can be implemented by"
+            "adding an IntervalTransform between lower and upper to a continuous "
+            "variable. A Potential that returns negative infinity for values outside "
+            "of the bounds can be used for discrete variables.",
+            FutureWarning,
+        )
+        cls._argument_checks(dist, **kwargs)
 
         if dims is not None:
             model = modelcontext(None)
@@ -185,12 +202,12 @@ class Bound:
                 raise ValueError("Given dims do not exist in model coordinates.")
 
         lower, upper, initval = cls._set_values(lower, upper, size, shape, initval)
-        distribution.tag.ignore_logprob = True
+        dist = ignore_logprob(dist)
 
-        if isinstance(distribution.owner.op, Continuous):
+        if isinstance(dist.owner.op, Continuous):
             res = _ContinuousBounded(
                 name,
-                [distribution, lower, upper],
+                [dist, lower, upper],
                 initval=floatX(initval),
                 size=size,
                 shape=shape,
@@ -199,7 +216,7 @@ class Bound:
         else:
             res = _DiscreteBounded(
                 name,
-                [distribution, lower, upper],
+                [dist, lower, upper],
                 initval=intX(initval),
                 size=size,
                 shape=shape,
@@ -210,20 +227,19 @@ class Bound:
     @classmethod
     def dist(
         cls,
-        distribution,
+        dist,
         lower=None,
         upper=None,
         size=None,
         shape=None,
         **kwargs,
     ):
-
-        cls._argument_checks(distribution, **kwargs)
+        cls._argument_checks(dist, **kwargs)
         lower, upper, initval = cls._set_values(lower, upper, size, shape, initval=None)
-        distribution.tag.ignore_logprob = True
-        if isinstance(distribution.owner.op, Continuous):
+        dist = ignore_logprob(dist)
+        if isinstance(dist.owner.op, Continuous):
             res = _ContinuousBounded.dist(
-                [distribution, lower, upper],
+                [dist, lower, upper],
                 size=size,
                 shape=shape,
                 **kwargs,
@@ -231,7 +247,7 @@ class Bound:
             res.tag.test_value = floatX(initval)
         else:
             res = _DiscreteBounded.dist(
-                [distribution, lower, upper],
+                [dist, lower, upper],
                 size=size,
                 shape=shape,
                 **kwargs,
@@ -240,7 +256,7 @@ class Bound:
         return res
 
     @classmethod
-    def _argument_checks(cls, distribution, **kwargs):
+    def _argument_checks(cls, dist, **kwargs):
         if "observed" in kwargs:
             raise ValueError(
                 "Observed Bound distributions are not supported. "
@@ -249,7 +265,7 @@ class Bound:
                 "with the cumulative probability function."
             )
 
-        if not isinstance(distribution, TensorVariable):
+        if not isinstance(dist, TensorVariable):
             raise ValueError(
                 "Passing a distribution class to `Bound` is no longer supported.\n"
                 "Please pass the output of a distribution instantiated via the "
@@ -257,26 +273,14 @@ class Bound:
                 '`pm.Bound("bound", pm.Normal.dist(0, 1), lower=0)`'
             )
 
-        try:
-            model = modelcontext(None)
-        except TypeError:
-            pass
-        else:
-            if distribution in model.basic_RVs:
-                raise ValueError(
-                    f"The distribution passed into `Bound` was already registered "
-                    f"in the current model.\nYou should pass an unregistered "
-                    f"(unnamed) distribution created via the `.dist()` API, such as:\n"
-                    f'`pm.Bound("bound", pm.Normal.dist(0, 1), lower=0)`'
-                )
+        check_dist_not_registered(dist)
 
-        if distribution.owner.op.ndim_supp != 0:
+        if dist.owner.op.ndim_supp != 0:
             raise NotImplementedError("Bounding of MultiVariate RVs is not yet supported.")
 
-        if not isinstance(distribution.owner.op, (Discrete, Continuous)):
+        if not isinstance(dist.owner.op, (Discrete, Continuous)):
             raise ValueError(
-                f"`distribution` {distribution} must be a Discrete or Continuous"
-                " distribution subclass"
+                f"`distribution` {dist} must be a Discrete or Continuous" " distribution subclass"
             )
 
     @classmethod

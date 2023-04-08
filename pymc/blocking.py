@@ -1,4 +1,4 @@
-#   Copyright 2020 The PyMC Developers
+#   Copyright 2023 The PyMC Developers
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,22 +17,55 @@ pymc.blocking
 
 Classes for working with subsets of parameters.
 """
-import collections
+from __future__ import annotations
 
 from functools import partial
-from typing import Callable, Dict, Optional, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+)
 
 import numpy as np
+
+from typing_extensions import TypeAlias
 
 __all__ = ["DictToArrayBijection"]
 
 
 T = TypeVar("T")
-PointType = Dict[str, np.ndarray]
+PointType: TypeAlias = Dict[str, np.ndarray]
+StatsDict: TypeAlias = Dict[str, Any]
+StatsType: TypeAlias = List[StatsDict]
+StatDtype: TypeAlias = Union[type, np.dtype]
+StatShape: TypeAlias = Optional[Sequence[Optional[int]]]
+
 
 # `point_map_info` is a tuple of tuples containing `(name, shape, dtype)` for
 # each of the raveled variables.
-RaveledVars = collections.namedtuple("RaveledVars", "data, point_map_info")
+class RaveledVars(NamedTuple):
+    data: np.ndarray
+    point_map_info: tuple[tuple[str, tuple[int, ...], np.dtype], ...]
+
+
+class Compose(Generic[T]):
+    """
+    Compose two functions in a pickleable way
+    """
+
+    def __init__(self, fa: Callable[[PointType], T], fb: Callable[[RaveledVars], PointType]):
+        self.fa = fa
+        self.fb = fb
+
+    def __call__(self, x: RaveledVars) -> T:
+        return self.fa(self.fb(x))
 
 
 class DictToArrayBijection:
@@ -48,20 +81,20 @@ class DictToArrayBijection:
         vars_info = tuple((v, k, v.shape, v.dtype) for k, v in var_dict.items())
         raveled_vars = [v[0].ravel() for v in vars_info]
         if raveled_vars:
-            res = np.concatenate(raveled_vars)
+            result = np.concatenate(raveled_vars)
         else:
-            res = np.array([])
-        return RaveledVars(res, tuple(v[1:] for v in vars_info))
+            result = np.array([])
+        return RaveledVars(result, tuple(v[1:] for v in vars_info))
 
     @staticmethod
     def rmap(
         array: RaveledVars,
-        start_point: Optional[PointType] = None,
+        start_point: PointType | None = None,
     ) -> PointType:
         """Map 1D concatenated array to a dictionary of variables in their original spaces.
 
         Parameters
-        ==========
+        ----------
         array
             The array to map.
         start_point
@@ -69,9 +102,9 @@ class DictToArrayBijection:
 
         """
         if start_point:
-            res = dict(start_point)
+            result = dict(start_point)
         else:
-            res = {}
+            result = {}
 
         if not isinstance(array, RaveledVars):
             raise TypeError("`array` must be a `RaveledVars` type")
@@ -80,13 +113,15 @@ class DictToArrayBijection:
         for name, shape, dtype in array.point_map_info:
             arr_len = np.prod(shape, dtype=int)
             var = array.data[last_idx : last_idx + arr_len].reshape(shape).astype(dtype)
-            res[name] = var
+            result[name] = var
             last_idx += arr_len
 
-        return res
+        return result
 
     @classmethod
-    def mapf(cls, f: Callable[[PointType], T], start_point: Optional[PointType] = None) -> T:
+    def mapf(
+        cls, f: Callable[[PointType], T], start_point: PointType | None = None
+    ) -> Callable[[RaveledVars], T]:
         """Create a callable that first maps back to ``dict`` inputs and then applies a function.
 
         function f: DictSpace -> T to ArraySpace -> T
@@ -100,16 +135,3 @@ class DictToArrayBijection:
         f: array -> T
         """
         return Compose(f, partial(cls.rmap, start_point=start_point))
-
-
-class Compose:
-    """
-    Compose two functions in a pickleable way
-    """
-
-    def __init__(self, fa, fb):
-        self.fa = fa
-        self.fb = fb
-
-    def __call__(self, x):
-        return self.fa(self.fb(x))

@@ -11,7 +11,7 @@ Functional Programming
   This contrasts with functions or methods that depend on variables that are not explicitly passed as an input (such as accessing `self.variable` inside a method) or that alter the inputs or other state variables in-place, instead of returning new distinct variables as outputs.
 
 Dispatching
-  Choosing which function or method implementation to use based on the type of the input variables (usually just the first variable). For some examples, see Python's documentation for the [singledispatch](https://docs.python.org/3/library/functools.html#functools.singledispatch) decorator.
+  Choosing which function or method implementation to use based on the type of the input variables (usually just the first variable). For some examples, see Python's documentation for the {func}`singledispatch <~functools.singledispatch>` decorator.
 
 [Dispersion](https://en.wikipedia.org/wiki/Statistical_dispersion)
   In statistics, dispersion (also called variability, scatter, or spread) is the extent to which a distribution is stretched or squeezed
@@ -123,5 +123,35 @@ Hierarchical Ordinary Differential Equation
 [Markov Chain Monte Carlo](https://en.wikipedia.org/wiki/Markov_chain_Monte_Carlo)
 [MCMC](https://en.wikipedia.org/wiki/Markov_chain_Monte_Carlo)
   Markov chain Monte Carlo (MCMC) methods comprise a class of algorithms for sampling from a probability distribution. By constructing a {term}`Markov Chain` that has the desired distribution as its equilibrium distribution, one can obtain a sample of the desired distribution by recording states from the chain.  Various algorithms exist for constructing chains, including the Metropolis–Hastings algorithm.
+
+tensor_like
+  Any scalar or sequence that can be interpreted as a {class}`~pytensor.tensor.TensorVariable`. In addition to TensorVariables, this includes NumPy ndarrays, scalars, lists and tuples (possibly nested). Any argument accepted by `pytensor.tensor.as_tensor_variable` is tensor_like.
+
+  ```{jupyter-execute}
+  import pytensor.tensor as pt
+
+  pt.as_tensor_variable([[1, 2.0], [0, 0]])
+  ```
+unnamed_distribution
+    PyMC distributions can be initialized directly (e.g. `pm.Normal`) or using the `.dist` classmethod (e.g. `pm.Normal.dist`). Distributions initialized with the 1st method are registered as model parameters and thus, need to be given a name and be initialized within a model context. "unnamed_distributions" are distributions initialized with the 2nd method. These are standalone distributions, they are not parameters in any model and can be used to draw samples from a distribution by itself or as parameters to other distributions like mixtures or censored.
+
+    "unnamed_distributions" can be used outside the model context. For example:
+
+    ```{jupyter-execute}
+    import pymc as pm
+
+    unnamed_dist = pm.Normal.dist(mu=1, sigma=2)
+    pm.draw(unnamed_dist, draws=10)
+    ```
+
+    Trying to initialize a named distribution outside a model context raises a `TypeError`:
+
+    ```{jupyter-execute}
+    :raises: TypeError
+
+    import pymc as pm
+
+    pm.Normal("variable")
+    ```
 
 :::::

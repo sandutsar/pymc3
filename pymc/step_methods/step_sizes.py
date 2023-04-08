@@ -1,4 +1,4 @@
-#   Copyright 2020 The PyMC Developers
+#   Copyright 2023 The PyMC Developers
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ import numpy as np
 
 from scipy import stats
 
-from pymc.backends.report import SamplerWarning, WarningType
+from pymc.stats.convergence import SamplerWarning, WarningType
 
 
 class DualAverageAdaptation:
@@ -52,7 +52,7 @@ class DualAverageAdaptation:
         self._hbar = (1 - w) * self._hbar + w * (self._target - accept_stat)
 
         self._log_step = self._mu - self._hbar * np.sqrt(count) / self._gamma
-        mk = count ** -k
+        mk = count**-k
         self._log_bar = mk * self._log_step + (1 - mk) * self._log_bar
         self._count += 1
 

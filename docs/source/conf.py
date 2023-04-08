@@ -17,12 +17,8 @@
 # serve to show the default.
 
 import os
-import sys
+from pathlib import Path
 
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 import pymc  # isort:skip
 
 # -- General configuration ------------------------------------------------
@@ -48,16 +44,45 @@ extensions = [
     "sphinx_design",
     "notfound.extension",
     "sphinx_copybutton",
+    "sphinx_remove_toctrees",
+    "jupyter_sphinx",
+    "sphinxext.rediraffe",
 ]
 
 # Don't auto-generate summary for class members.
 numpydoc_show_class_members = False
+autosummary_generate = True
+autodoc_typehints = "none"
+remove_from_toctrees = ["**/classmethods/*"]
+
+numpydoc_xref_param_type = True
+# fmt: off
+numpydoc_xref_ignore = {
+    "of", "or", "optional", "default", "numeric", "type", "scalar", "1D", "2D", "3D", "nD", "array",
+    "instance", "M", "N"
+}
+# fmt: on
+numpydoc_xref_aliases = {
+    "TensorVariable": ":class:`~pytensor.tensor.TensorVariable`",
+    "RandomVariable": ":class:`~pytensor.tensor.random.RandomVariable`",
+    "ndarray": ":class:`~numpy.ndarray`",
+    "Covariance": ":mod:`Covariance <pymc.gp.cov>`",
+    "Mean": ":mod:`Mean <pymc.gp.mean>`",
+    "InferenceData": ":class:`~arviz.InferenceData`",
+    "MultiTrace": ":class:`~pymc.backends.base.MultiTrace`",
+    "BaseTrace": ":class:`~pymc.backends.base.BaseTrace`",
+    "Point": ":class:`~pymc.Point`",
+    "Model": ":class:`~pymc.Model`",
+    "SMC_kernel": ":ref:`SMC Kernel <smc_kernels>`",
+    "PyTensor_Op": ":class:`PyTensor Op <pytensor.graph.op.Op>`",
+    "tensor_like": ":term:`tensor_like`",
+    "unnamed_distribution": ":term:`unnamed_distribution`",
+    "numpy_Generator": ":class:`~numpy.random.Generator`",
+    "Distribution": ":ref:`Distribution <api_distributions>`",
+}
 
 # Show the documentation of __init__ and the class docstring
-autoclass_content = "both"
-
-# Do not show the return type as seperate section
-napoleon_use_rtype = False
+# autoclass_content = "both"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -85,8 +110,14 @@ author = "PyMC contributors"
 version = pymc.__version__
 if os.environ.get("READTHEDOCS", False):
     rtd_version = os.environ.get("READTHEDOCS_VERSION", "")
-    if "." not in rtd_version and rtd_version.lower() != "stable":
+    if rtd_version.lower() == "stable":
+        version = pymc.__version__.split("+")[0]
+    elif rtd_version.lower() == "latest":
         version = "dev"
+    else:
+        version = rtd_version
+else:
+    rtd_version = "local"
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -95,10 +126,10 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # configure notfound extension to not add any prefix to the urls
-notfound_urls_prefix = "/en/latest/"
+notfound_urls_prefix = "/projects/docs/en/latest/"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -115,11 +146,21 @@ exclude_patterns = [
     "about/featured_testimonials.md",
 ]
 
-# myst and panels config
-jupyter_execute_notebooks = "off"
+# myst config
+nb_execution_mode = "force"
+nb_execution_allow_errors = False
+nb_execution_raise_on_error = True
+nb_execution_timeout = 300
+nb_kernel_rgx_aliases = {".*": "python3"}
 myst_enable_extensions = ["colon_fence", "deflist", "dollarmath", "amsmath", "substitution"]
-panels_add_bootstrap_css = False
+myst_substitutions = {
+    "version_slug": rtd_version,
+}
+myst_heading_anchors = None
 
+rediraffe_redirects = {
+    "index.md": "learn.md",
+}
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
 # default_role = None
@@ -149,18 +190,45 @@ todo_include_todos = False
 
 # intersphinx configuration to ease linking arviz docs
 intersphinx_mapping = {
-    "arviz": ("https://arviz-devs.github.io/arviz/", None),
-    "aesara": ("https://aesara.readthedocs.io/en/latest/", None),
+    "arviz": ("https://python.arviz.org/en/latest/", None),
+    "pytensor": ("https://pytensor.readthedocs.io/en/latest/", None),
+    "home": ("https://www.pymc.io", None),
+    "pmx": ("https://www.pymc.io/projects/experimental/en/latest", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "nb": ("https://pymc-examples.readthedocs.io/en/latest/", None),
+    "nb": ("https://www.pymc.io/projects/examples/en/latest/", None),
+    "myst": ("https://myst-parser.readthedocs.io/en/latest", None),
+    "myst-nb": ("https://myst-nb.readthedocs.io/en/latest/", None),
+    "python": ("https://docs.python.org/3/", None),
+    "xarray": ("https://docs.xarray.dev/en/stable/", None),
 }
+
+
+def remove_index(app):
+    """
+    This removes the index pages so rediraffe generates the redirect placeholder
+    It needs to be present initially for the toctree as it defines the navbar.
+    """
+
+    index_file = Path(app.outdir) / "index.html"
+    index_file.unlink()
+
+    app.env.project.docnames -= {"index"}
+    yield "", {}, "layout.html"
+
+
+def setup(app):
+    """
+    Add extra step to sphinx build
+    """
+
+    app.connect("html-collect-pages", remove_index, 100)
 
 
 # -- Options for HTML output ----------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = "pydata_sphinx_theme"
+html_theme = "pymc_sphinx_theme"
 
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -168,44 +236,16 @@ html_theme = "pydata_sphinx_theme"
 # documentation.
 
 html_theme_options = {
-    "icon_links": [
-        {
-            "name": "GitHub",
-            "url": "https://github.com/pymc-devs/pymc",
-            "icon": "fab fa-github-square",
-        },
-        {
-            "name": "Twitter",
-            "url": "https://twitter.com/pymc_devs",
-            "icon": "fab fa-twitter-square",
-        },
-        {
-            "name": "Discourse",
-            "url": "https://discourse.pymc.io",
-            "icon": "fab fa-discourse",
-        },
-    ],
-    "show_prev_next": False,
-    "navbar_align": "content",
-    "navbar_start": ["navbar-logo", "navbar-version"],
-    "navbar_end": ["search-field.html", "navbar-icon-links.html"],
-    "search_bar_text": "Search...",
-    "use_edit_page_button": False,  # TODO: see how to skip of fix for generated pages
-    "externalrefs": True,
-    "google_analytics_id": "UA-176578023-1",
+    "logo": {
+        "link": "https://www.pymc.io",
+    },
 }
 html_context = {
     "github_user": "pymc-devs",
     "github_repo": "pymc",
     "github_version": "main",
     "doc_path": "docs/source/",
-}
-# this controls which sidebar sections are available in which pages. [] removes the left sidebar
-html_sidebars = {
-    "learn": [],
-    "installation": [],
-    "community": ["twitter", "sidebar-nav-bs.html", "sidebar-ethical-ads.html"],
-    "**": ["sidebar-nav-bs.html", "sidebar-ethical-ads.html"],
+    "default_mode": "light",
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -246,7 +286,6 @@ html_static_path = ["../logos"]
 # html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
-# html_sidebars = {"**": ["about.html", "navigation.html", "searchbox.html"]}
 
 # Additional templates that should be rendered to pages, maps page names to
 # template names.

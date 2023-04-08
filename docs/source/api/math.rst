@@ -3,13 +3,31 @@ Math
 ====
 
 This submodule contains various mathematical functions. Most of them are imported directly
-from aesara.tensor (see there for more details). Doing any kind of math with PyMC random
-variables, or defining custom likelihoods or priors requires you to use these Aesara
+from pytensor.tensor (see there for more details). Doing any kind of math with PyMC random
+variables, or defining custom likelihoods or priors requires you to use these PyTensor
 expressions rather than NumPy or Python code.
 
-.. currentmodule:: pymc.math
+.. currentmodule:: pymc
 
+Functions exposed in pymc namespace
+-----------------------------------
 .. autosummary::
+   :toctree: generated/
+
+   expand_packed_triangular
+   logit
+   invlogit
+   probit
+   invprobit
+   logsumexp
+
+Functions exposed in pymc.math
+------------------------------
+
+.. automodule:: pymc.math
+.. autosummary::
+   :toctree: generated/
+
    dot
    constant
    flatten
@@ -30,7 +48,7 @@ expressions rather than NumPy or Python code.
    where
    and_
    or_
-   abs_
+   abs
    exp
    log
    cos
@@ -58,6 +76,3 @@ expressions rather than NumPy or Python code.
    logsumexp
    invlogit
    logit
-
-.. automodule:: pymc.math
-   :members:

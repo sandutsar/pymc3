@@ -2,8 +2,9 @@
 Discrete
 ********
 
-.. currentmodule:: pymc.distributions.discrete
+.. currentmodule:: pymc
 .. autosummary::
+   :toctree: generated
 
    Binomial
    BetaBinomial
@@ -11,7 +12,7 @@ Discrete
    DiscreteWeibull
    Poisson
    NegativeBinomial
-   Constant
+   DiracDelta
    ZeroInflatedPoisson
    ZeroInflatedBinomial
    ZeroInflatedNegativeBinomial
@@ -21,6 +22,3 @@ Discrete
    Categorical
    OrderedLogistic
    OrderedProbit
-
-.. automodule:: pymc.distributions.discrete
-   :members:

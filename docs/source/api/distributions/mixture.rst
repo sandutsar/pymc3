@@ -2,11 +2,9 @@
 Mixture
 *******
 
-.. currentmodule:: pymc.distributions.mixture
+.. currentmodule:: pymc
 .. autosummary::
+   :toctree: generated
+
    Mixture
    NormalMixture
-   MixtureSameFamily
-
-.. automodule:: pymc.distributions.mixture
-   :members:
